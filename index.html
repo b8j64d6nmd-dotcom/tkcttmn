@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2b4a7c">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<title>宅建 過去問ドリル</title>
+<style>
+  :root{
+    --paper:#f6f3ec; --paper2:#efeadf; --ink:#20242e; --ink-soft:#5b6070;
+    --indigo:#2b4a7c; --indigo-d:#1d3458; --line:#ddd6c7;
+    --ok:#2e7d4f; --ok-bg:#e7f3ec; --ng:#c0392b; --ng-bg:#fbecea;
+    --chip:#ece4d4; --shadow:0 6px 24px rgba(40,40,60,.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","Meiryo",sans-serif;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:0 16px 48px}
+  header{
+    position:sticky;top:0;z-index:10;
+    background:linear-gradient(180deg,var(--paper) 70%,rgba(246,243,236,0));
+    padding:18px 0 10px;
+    display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .brand{
+    font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+    font-size:21px;font-weight:600;letter-spacing:.04em;
+  }
+  .brand small{font-size:12px;color:var(--ink-soft);font-weight:400;margin-left:6px;letter-spacing:.02em}
+  .pill{
+    font-size:12.5px;background:var(--indigo);color:#fff;border-radius:999px;
+    padding:5px 12px;white-space:nowrap;font-variant-numeric:tabular-nums;
+  }
+  .pill.done{background:var(--ok)}
+
+  .card{
+    background:#fffdf8;border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow);padding:22px 20px;margin-top:8px;
+    animation:rise .35s ease both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .chip{font-size:12px;background:var(--chip);color:var(--ink-soft);border-radius:8px;padding:3px 9px;letter-spacing:.02em}
+  .chip.subj{background:var(--indigo-d);color:#fff}
+  .chip.box{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--ink-soft)}
+
+  .stmt{font-size:16.5px;letter-spacing:.01em;margin:0 0 18px}
+
+  .choices{display:flex;flex-direction:column;gap:10px}
+  .choice{
+    display:flex;gap:12px;align-items:flex-start;text-align:left;
+    background:#fff;border:1.5px solid var(--line);border-radius:12px;
+    padding:13px 14px;font-size:15px;color:var(--ink);cursor:pointer;
+    font-family:inherit;line-height:1.6;transition:border-color .15s,background .15s,transform .05s;
+  }
+  .choice:active{transform:scale(.995)}
+  .choice .num{
+    flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+    border:1.5px solid var(--indigo);color:var(--indigo);
+    display:grid;place-items:center;font-size:14px;font-weight:700;margin-top:1px;
+  }
+  .choice .ctxt{flex:1}
+  .choice:not(.locked):hover{border-color:var(--indigo)}
+  .choice.locked{cursor:default}
+  .choice.correct{background:var(--ok-bg);border-color:var(--ok)}
+  .choice.correct .num{background:var(--ok);border-color:var(--ok);color:#fff}
+  .choice.wrong{background:var(--ng-bg);border-color:var(--ng)}
+  .choice.wrong .num{background:var(--ng);border-color:var(--ng);color:#fff}
+  .choice.dim{opacity:.6}
+
+  .expl{margin-top:9px;font-size:13.5px;color:var(--ink-soft);
+    border-left:3px solid var(--line);padding:2px 0 2px 12px;display:none}
+  .choice.locked .expl{display:block;animation:fade .3s ease both}
+  .expl b.mk{font-weight:700}
+  .expl .ok{color:var(--ok)} .expl .ng{color:var(--ng)}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+
+  .result{margin-top:18px;border-radius:14px;padding:16px;display:none}
+  .result.show{display:block;animation:fade .3s ease both}
+  .result.r-ok{background:var(--ok-bg)} .result.r-ng{background:var(--ng-bg)}
+  .result .judge{font-weight:700;font-size:15px;margin-bottom:6px}
+  .result.r-ok .judge{color:var(--ok)} .result.r-ng .judge{color:var(--ng)}
+  .result .sum{font-size:14.5px;font-weight:600;margin-bottom:8px}
+  .result .det{font-size:14px;color:#3a3f4d}
+  .result .art{margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+  .result .nextline{margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+
+  .btn{
+    display:block;width:100%;margin-top:16px;border:none;border-radius:12px;
+    background:var(--indigo);color:#fff;font-size:16px;font-weight:600;
+    padding:14px;cursor:pointer;font-family:inherit;letter-spacing:.04em;
+    transition:background .15s,transform .05s;
+  }
+  .btn:hover{background:var(--indigo-d)} .btn:active{transform:scale(.99)}
+  .btn.ghost{background:transparent;color:var(--indigo);border:1.5px solid var(--line)}
+  .btn.ghost:hover{background:var(--paper2)}
+
+  .done-card{text-align:center;padding:34px 20px}
+  .done-card .big{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:22px;margin:6px 0 4px}
+  .done-card .sub{color:var(--ink-soft);font-size:14px;margin-bottom:18px}
+  .stats{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:14px 0}
+  .stat{background:#fffdf8;border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:92px}
+  .stat .n{font-size:24px;font-weight:700;color:var(--indigo);font-variant-numeric:tabular-nums}
+  .stat .l{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+
+  footer{margin-top:26px;text-align:center}
+  .reset{background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit}
+  .note{font-size:11px;color:#9a9384;margin-top:10px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">宅建 過去問ドリル <small>個人学習用</small></div>
+    <div id="pill" class="pill">—</div>
+  </header>
+  <main id="main"></main>
+  <footer>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+    <button class="reset" id="importBtn">問題データを読み込む（.json）</button>
+    <span style="color:#c9c2b3"> ｜ </span>
+    <button class="reset" id="seedBtn">収録データに戻す</button>
+    <span style="color:#c9c2b3"> ｜ </span>
+    <button class="reset" id="resetBtn">学習記録をリセット</button>
+    <div class="note" id="srcNote"></div>
+    <div class="note">
+      ※間隔反復（ライトナー方式）で出題。正解で間隔が伸び、不正解で翌日に戻ります。<br>
+      収録は自作の練習問題です。過去問は個人利用の範囲でご自身で追加してください。<br>
+      <a href="./converter.html" style="color:#2b4a7c">データ変換ツールを開く</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   問題データ（QUESTIONS）
+   ここをスプレッドシート→JSON変換で差し替える想定。
+   1問 = { id, source, subject, topic, type, statement,
+           choices:[{n,text,correct,expl}], explanation:{summary,detail,article} }
+   ============================================================ */
+const SEED_QUESTIONS = [
+  {
+    id:"orig_001", source:"自作（オリジナル）", subject:"宅建業法", topic:"クーリング・オフ", type:"正誤",
+    statement:"宅地建物取引業者Aが自ら売主、宅建業者でない買主Bとの宅地売買契約について、クーリング・オフに関する次の記述のうち、宅建業法上 正しいもの はどれか。",
+    choices:[
+      {n:1, text:"BがAの事務所で買受けの申込みをし、後日喫茶店で契約を締結した場合、Bはクーリング・オフによる解除ができる。", correct:false,
+       expl:"申込みをした場所で判定する。事務所での申込みは「事務所等」にあたり、解除はできない。"},
+      {n:2, text:"Bが喫茶店で申込みをし、その際Aからクーリング・オフを書面で告げられた。その日から起算して10日後にBが書面で解除した場合、Aはこれを拒める。", correct:true,
+       expl:"書面で告げられた日から起算して8日を経過すると解除できない。10日後ならAは拒否できる。"},
+      {n:3, text:"Bが自ら指定した自宅でAから説明を受け申込みをした場合でも、Bはクーリング・オフによる解除ができる。", correct:false,
+       expl:"買主が自ら申し出た自宅・勤務先は「事務所等」扱い。解除はできない。"},
+      {n:4, text:"クーリング・オフによる解除がなされた場合、Aは違約金の支払を請求できる。", correct:false,
+       expl:"売主は損害賠償・違約金を請求できず、受領した手付金等は速やかに返還する。"}
+    ],
+    explanation:{
+      summary:"可否は「申込みをした場所」で決まる。事務所等以外＝可、事務所等＝不可。",
+      detail:"自ら売主の業者と非業者の買主の取引で、事務所等以外で申し込んだ場合に使える。書面で告げられた日から起算して8日経過、または引渡し＋代金全額支払いで解除できなくなる。解除は書面を発した時に効力（発信主義）。",
+      article:"宅建業法 第37条の2"
+    }
+  },
+  {
+    id:"orig_002", source:"自作（オリジナル）", subject:"宅建業法", topic:"重要事項の説明（35条）", type:"正誤",
+    statement:"宅地建物取引業者が行う重要事項の説明に関する次の記述のうち、宅建業法上 正しいもの はどれか。",
+    choices:[
+      {n:1, text:"重要事項の説明は、契約が成立した後、速やかに行わなければならない。", correct:false,
+       expl:"重要事項の説明は契約が成立するまでの間に行う。"},
+      {n:2, text:"重要事項の説明は、専任の宅地建物取引士が行わなければならない。", correct:false,
+       expl:"説明を行うのは宅地建物取引士であればよく、専任である必要はない。"},
+      {n:3, text:"重要事項説明書には、宅地建物取引士が記名しなければならない。", correct:true,
+       expl:"35条書面には取引士の記名が必要（押印は法改正で不要に）。"},
+      {n:4, text:"買主が宅建業者である場合でも、重要事項の口頭説明を省略することはできない。", correct:false,
+       expl:"業者間取引では書面の交付は必要だが、説明は省略できる。"}
+    ],
+    explanation:{
+      summary:"説明は契約成立前。担い手は取引士（専任不要）。35条書面には取引士の記名が要る。",
+      detail:"重要事項の説明は契約が成立するまでの間に、宅地建物取引士が行う。業者間取引では書面交付は必要だが説明自体は省略可。書面には取引士の記名が必要。",
+      article:"宅建業法 第35条"
+    }
+  },
+  {
+    id:"orig_003", source:"自作（オリジナル）", subject:"宅建業法", topic:"媒介契約（専任）", type:"正誤",
+    statement:"専任媒介契約に関する次の記述のうち、宅建業法上 正しいもの はどれか。",
+    choices:[
+      {n:1, text:"有効期間は依頼者の申出により更新でき、更新後の期間は6月を超えることができる。", correct:false,
+       expl:"専任媒介の有効期間は更新後も3月が上限。"},
+      {n:2, text:"業者は依頼者に対し、1週間に1回以上、業務処理状況を報告しなければならない。", correct:false,
+       expl:"専任媒介は2週間に1回以上。1週間に1回以上は専属専任。"},
+      {n:3, text:"有効期間中、依頼者は他の業者に重ねて媒介を依頼することができる。", correct:false,
+       expl:"専任媒介では他業者への重複依頼はできない（重複可は一般媒介）。"},
+      {n:4, text:"業者は契約締結日から休業日を除き7日以内に、指定流通機構へ登録しなければならない。", correct:true,
+       expl:"専任は7日以内（休業日除く）、専属専任は5日以内（休業日除く）に登録。"}
+    ],
+    explanation:{
+      summary:"専任＝期間3月・報告2週に1回以上・重複依頼不可・登録は7日以内（休業日除く）。",
+      detail:"専任媒介の有効期間は3月（更新後も3月上限）、業務報告は2週間に1回以上、指定流通機構への登録は契約日から休業日を除き7日以内。他業者への重複依頼は不可。",
+      article:"宅建業法 第34条の2"
+    }
+  }
+];
+
+/* ===== 問題データの取得（読み込み or 収録） ===== */
+const QKEY = "takken_questions_v1";
+function loadQuestions(){
+  try{ const j=JSON.parse(localStorage.getItem(QKEY)); if(Array.isArray(j)&&j.length) return j; }catch(e){}
+  return SEED_QUESTIONS;
+}
+let QUESTIONS = loadQuestions();
+function usingImported(){ return !!localStorage.getItem(QKEY); }
+
+/* ===== ライトナー方式 ===== */
+const INTERVALS = {1:1, 2:3, 3:7, 4:16, 5:35}; // 箱→次回までの日数
+const STORE_KEY = "takken_reviews_v1";
+
+const todayISO = () => new Date().toLocaleDateString("sv-SE"); // yyyy-mm-dd(ローカル)
+function addDays(iso, d){ const t=new Date(iso+"T00:00:00"); t.setDate(t.getDate()+d); return t.toLocaleDateString("sv-SE"); }
+function loadReviews(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||{}}catch(e){return {}} }
+function saveReviews(r){ localStorage.setItem(STORE_KEY, JSON.stringify(r)); }
+
+function getReview(id){ return loadReviews()[id] || {box:1, lastAnswered:null, nextDue:null, history:[]}; }
+function isDue(id){ const r=getReview(id); return !r.nextDue || r.nextDue <= todayISO(); }
+
+function updateReview(id, correct){
+  const reviews = loadReviews();
+  const r = reviews[id] || {box:1, lastAnswered:null, nextDue:null, history:[]};
+  r.box = correct ? Math.min(5, r.box+1) : 1;
+  r.lastAnswered = todayISO();
+  r.nextDue = addDays(todayISO(), INTERVALS[r.box]);
+  r.history.push({date:todayISO(), correct});
+  reviews[id] = r;
+  saveReviews(reviews);
+  return r;
+}
+
+/* ===== 出題キュー ===== */
+function dueQueue(){ return QUESTIONS.filter(q => isDue(q.id)); }
+
+/* ===== 画面描画 ===== */
+const main = document.getElementById("main");
+const pill = document.getElementById("pill");
+
+function render(){
+  const queue = dueQueue();
+  if(queue.length === 0){ renderDone(); return; }
+  pill.className = "pill";
+  pill.textContent = "残り " + queue.length + " 問";
+  renderQuestion(queue[0]);
+}
+
+function renderQuestion(q){
+  const r = getReview(q.id);
+  main.innerHTML = "";
+  const card = el("div","card");
+  const meta = el("div","meta");
+  meta.appendChild(chip(q.subject,"chip subj"));
+  meta.appendChild(chip(q.topic,"chip"));
+  meta.appendChild(chip("箱"+r.box+"/5","chip box"));
+  card.appendChild(meta);
+
+  const stmt = el("p","stmt"); stmt.textContent = q.statement; card.appendChild(stmt);
+
+  const choices = el("div","choices");
+  q.choices.forEach(c=>{
+    const b = el("button","choice");
+    const num = el("span","num"); num.textContent = c.n;
+    const wrap = el("div","ctxt");
+    const t = document.createElement("div"); t.textContent = c.text;
+    const ex = el("div","expl"); ex.innerHTML = (c.correct?'<span class="ok">○ </span>':'<span class="ng">× </span>')+escapeHtml(c.expl);
+    wrap.appendChild(t); wrap.appendChild(ex);
+    b.appendChild(num); b.appendChild(wrap);
+    b.onclick = ()=>answer(q, c.n, card, choices);
+    choices.appendChild(b);
+  });
+  card.appendChild(choices);
+
+  const result = el("div","result"); result.id="result";
+  card.appendChild(result);
+  main.appendChild(card);
+}
+
+function answer(q, chosen, card, choicesEl){
+  const correctN = q.choices.find(c=>c.correct).n;
+  const isCorrect = chosen === correctN;
+  [...choicesEl.children].forEach((b,i)=>{
+    const c = q.choices[i];
+    b.classList.add("locked");
+    b.onclick = null;
+    if(c.correct) b.classList.add("correct");
+    else if(c.n===chosen) b.classList.add("wrong");
+    else b.classList.add("dim");
+  });
+
+  const r = updateReview(q.id, isCorrect);
+
+  const res = card.querySelector("#result");
+  res.className = "result show " + (isCorrect?"r-ok":"r-ng");
+  res.innerHTML =
+    '<div class="judge">'+(isCorrect?"正解":"不正解")+'　正解は '+correctN+'</div>'+
+    '<div class="sum">'+escapeHtml(q.explanation.summary)+'</div>'+
+    '<div class="det">'+escapeHtml(q.explanation.detail)+'</div>'+
+    '<div class="art">根拠：'+escapeHtml(q.explanation.article)+'</div>'+
+    '<div class="nextline">次回出題：'+r.nextDue+'（箱'+r.box+'）</div>';
+
+  const btn = el("button","btn"); btn.textContent = "次へ";
+  btn.onclick = render;
+  res.appendChild(btn);
+  res.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+function renderDone(){
+  pill.className = "pill done"; pill.textContent = "完了";
+  const reviews = loadReviews();
+  const studied = QUESTIONS.filter(q=>reviews[q.id]).length;
+  const mastered = QUESTIONS.filter(q=>(reviews[q.id]||{}).box===5).length;
+  // 直近の次回出題日
+  const upcoming = QUESTIONS.map(q=>(reviews[q.id]||{}).nextDue).filter(Boolean).sort();
+  const next = upcoming[0] || "—";
+
+  main.innerHTML = "";
+  const card = el("div","card done-card");
+  card.innerHTML =
+    '<div class="big">今日のぶんは完了</div>'+
+    '<div class="sub">お疲れさまでした。次の出題日にまた解きましょう。</div>'+
+    '<div class="stats">'+
+      stat(QUESTIONS.length,"収録問題")+
+      stat(studied,"学習済み")+
+      stat(mastered,"箱5（定着）")+
+    '</div>'+
+    '<div class="sub">次回の出題日：'+next+'</div>';
+  const b = el("button","btn ghost"); b.textContent = "もう一度すべて解く（記録は保持）";
+  b.onclick = ()=>{ renderReviewAll(); };
+  card.appendChild(b);
+  main.appendChild(card);
+}
+
+// 復習目的で、出題日に関係なく全問を一巡する簡易モード
+let forceAll = null;
+function renderReviewAll(){
+  forceAll = QUESTIONS.map(q=>q.id);
+  pill.className="pill"; pill.textContent="復習 "+forceAll.length+" 問";
+  stepForceAll();
+}
+function stepForceAll(){
+  if(!forceAll || forceAll.length===0){ forceAll=null; render(); return; }
+  const q = QUESTIONS.find(x=>x.id===forceAll[0]);
+  renderQuestionForce(q);
+}
+function renderQuestionForce(q){
+  renderQuestion(q);
+  // answerを上書きせず、次へだけ強制モードのステップに差し替える
+  const choicesEl = main.querySelector(".choices");
+  [...choicesEl.children].forEach((b,i)=>{
+    b.onclick = ()=>{
+      answer(q, q.choices[i].n, main.querySelector(".card"), choicesEl);
+      const btn = main.querySelector(".result .btn");
+      btn.textContent = "次へ";
+      btn.onclick = ()=>{ forceAll.shift(); pill.textContent="復習 "+forceAll.length+" 問"; stepForceAll(); };
+    };
+  });
+}
+
+/* ===== ユーティリティ ===== */
+function el(tag,cls){ const e=document.createElement(tag); if(cls)e.className=cls; return e; }
+function chip(text,cls){ const c=el("span",cls); c.textContent=text; return c; }
+function stat(n,l){ return '<div class="stat"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
+function escapeHtml(s){ return s.replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+document.getElementById("resetBtn").onclick = ()=>{
+  if(confirm("学習記録（箱・出題日）をすべて消去します。よろしいですか？")){
+    localStorage.removeItem(STORE_KEY); forceAll=null; render();
+  }
+};
+
+function refreshSrc(){
+  document.getElementById("srcNote").textContent =
+    "現在の問題データ：" + (usingImported() ? "読み込んだデータ" : "収録データ（自作）") + "（" + QUESTIONS.length + "問）";
+}
+document.getElementById("importBtn").onclick = ()=> document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = function(){
+  const f=this.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const j=JSON.parse(e.target.result);
+      if(!Array.isArray(j) || !j.length) throw new Error("空または配列でない");
+      localStorage.setItem(QKEY, JSON.stringify(j));
+      QUESTIONS = loadQuestions(); forceAll=null;
+      alert(j.length+"問を読み込みました。");
+      refreshSrc(); render();
+    }catch(err){ alert("JSONの形式が正しくありません。変換ツールで出力した questions.json を選んでください。"); }
+    this.value="";
+  };
+  r.readAsText(f);
+};
+document.getElementById("seedBtn").onclick = ()=>{
+  if(!usingImported()){ alert("すでに収録データを使用中です。"); return; }
+  if(confirm("読み込んだ問題データを消して、収録データ（自作）に戻します。学習記録は残ります。")){
+    localStorage.removeItem(QKEY); QUESTIONS = loadQuestions(); forceAll=null;
+    refreshSrc(); render();
+  }
+};
+
+refreshSrc();
+render();
+
+/* ===== PWA: サービスワーカー登録 ===== */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

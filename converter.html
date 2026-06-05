@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宅建データ変換ツール</title>
+<script src="./xlsx.full.min.js"></script>
+<style>
+  :root{--paper:#f6f3ec;--ink:#20242e;--soft:#5b6070;--indigo:#2b4a7c;--indigo-d:#1d3458;
+    --line:#ddd6c7;--ok:#2e7d4f;--ng:#c0392b;--ok-bg:#e7f3ec;--warn-bg:#fdf3e3;--warn:#b8860b;}
+  *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;line-height:1.7}
+  .wrap{max-width:620px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:22px;font-weight:600;letter-spacing:.04em;margin:0 0 4px}
+  .lead{color:var(--soft);font-size:14px;margin:0 0 20px}
+  .card{background:#fffdf8;border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 6px 24px rgba(40,40,60,.08)}
+  .drop{border:2px dashed var(--line);border-radius:14px;padding:30px 16px;text-align:center;color:var(--soft);cursor:pointer;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--indigo);background:#fff}
+  .drop b{color:var(--ink)}
+  input[type=file]{display:none}
+  .btn{border:none;border-radius:11px;background:var(--indigo);color:#fff;font:inherit;font-weight:600;
+    padding:12px 18px;cursor:pointer;letter-spacing:.03em;margin:6px 6px 0 0}
+  .btn:hover{background:var(--indigo-d)} .btn.ghost{background:transparent;color:var(--indigo);border:1.5px solid var(--line)}
+  .btn:disabled{opacity:.4;cursor:default}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 14px;min-width:84px}
+  .stat .n{font-size:22px;font-weight:700;color:var(--indigo)} .stat .l{font-size:11.5px;color:var(--soft)}
+  .warns{background:var(--warn-bg);border:1px solid #eccf8e;border-radius:11px;padding:12px 14px;margin-top:6px}
+  .warns .t{color:var(--warn);font-weight:700;font-size:13.5px;margin-bottom:6px}
+  .warns ul{margin:0;padding-left:18px;font-size:13px;color:#7a5e1a}
+  .ok-msg{color:var(--ok);font-weight:700}
+  pre{background:#1f2430;color:#e8e6df;border-radius:11px;padding:14px;overflow:auto;font-size:12px;max-height:280px}
+  .muted{color:var(--soft);font-size:12.5px}
+  .hide{display:none}
+  code{background:#ece4d4;border-radius:5px;padding:1px 5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>宅建データ変換ツール</h1>
+  <p class="lead">記入済みの <code>takken_data_template.xlsx</code> を読み込み、アプリ用の <code>questions.json</code> に変換します。すべてブラウザ内で処理され、データは外部に送信されません。</p>
+
+  <div class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".xlsx,.xlsm">
+      <div>📄 ここにスプレッドシートを<b>ドラッグ</b>、またはタップして選択</div>
+      <div class="muted" style="margin-top:6px">.xlsx / .xlsm 対応</div>
+    </label>
+  </div>
+
+  <div class="card hide" id="resultCard">
+    <div class="stats" id="stats"></div>
+    <div id="warnArea"></div>
+    <div style="margin-top:14px">
+      <button class="btn" id="dlBtn">questions.json をダウンロード</button>
+      <button class="btn ghost" id="copyBtn">QUESTIONS配列をコピー</button>
+    </div>
+    <p class="muted" style="margin-top:14px">プレビュー（先頭1問）</p>
+    <pre id="preview"></pre>
+    <p class="muted">この <code>questions.json</code> を、アプリの「問題データを読み込む」から取り込めば差し替え完了です。</p>
+  </div>
+
+  <div class="card">
+    <p class="muted" style="margin:0">
+      変換の流れ：questions / choices / explanations / question_topics / topics の各シートを id で結合し、1問ぶんのまとまりにします。<br>
+      チェック項目：選択肢が4個か／正解の肢がちょうど1個か／論点や解説が紐づいているか／解説が検証済み（verified=TRUE）か。
+    </p>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let lastJson=null, lastArrayText=null;
+
+const drop=$("drop"), file=$("file");
+["dragover","dragenter"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",ev=>{ if(ev.dataTransfer.files[0]) handle(ev.dataTransfer.files[0]); });
+file.addEventListener("change",()=>{ if(file.files[0]) handle(file.files[0]); });
+
+function truthy(v){ return ["TRUE","1","YES","○","TRUE()","true"].includes(String(v==null?"":v).trim().toUpperCase()) || v===true || v===1; }
+
+function rowsOf(wb,name){
+  const ws=wb.Sheets[name];
+  if(!ws) return null;
+  return XLSX.utils.sheet_to_json(ws,{defval:null});
+}
+
+function handle(f){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      convert(wb);
+    }catch(err){ alert("読み込みに失敗しました: "+err.message); }
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function convert(wb){
+  const need=["subjects","topics","questions","choices","explanations","question_topics"];
+  const miss=need.filter(n=>!wb.Sheets[n]);
+  if(miss.length){ alert("シートが見つかりません: "+miss.join(", ")); return; }
+
+  const subjects={}; (rowsOf(wb,"subjects")||[]).forEach(s=>{ if(s.id) subjects[s.id]=s.name||s.id; });
+  const topics={}; (rowsOf(wb,"topics")||[]).forEach(t=>{ if(t.id) topics[t.id]=t; });
+
+  const qtopics={}; (rowsOf(wb,"question_topics")||[]).forEach(qt=>{
+    if(!qt.question_id) return;
+    (qtopics[qt.question_id]=qtopics[qt.question_id]||[]).push(qt.topic_id);
+  });
+  const choices={}; (rowsOf(wb,"choices")||[]).forEach(c=>{
+    if(!c.question_id) return;
+    (choices[c.question_id]=choices[c.question_id]||[]).push(c);
+  });
+  const expl={}; (rowsOf(wb,"explanations")||[]).forEach(e=>{ if(e.question_id) expl[e.question_id]=e; });
+
+  const out=[], warns=[];
+  (rowsOf(wb,"questions")||[]).forEach(q=>{
+    if(!q.id || !q.statement) return; // 空行・未入力はスキップ
+    const qid=q.id;
+    const chs=(choices[qid]||[]).slice().sort((a,b)=>(a.number||0)-(b.number||0));
+    if(chs.length!==4) warns.push(qid+"：選択肢が"+chs.length+"個（4個必要）");
+    const correctNs=chs.filter(c=>truthy(c.is_correct)).map(c=>c.number);
+    if(correctNs.length!==1) warns.push(qid+"：正解の肢が"+correctNs.length+"個（1個必要）");
+    const tids=(qtopics[qid]||[]);
+    if(tids.length===0) warns.push(qid+"：論点（question_topics）が未設定");
+    const tnames=tids.map(t=>topics[t]?topics[t].name:("?"+t));
+    const e=expl[qid];
+    if(!e) warns.push(qid+"：解説（explanations）が未設定");
+    else if(!truthy(e.verified)) warns.push(qid+"：解説が未検証（verified=FALSE）");
+
+    out.push({
+      id:qid,
+      source:q.source||"",
+      subject:subjects[q.subject_id]||q.subject_id||"",
+      topic:tnames.join("／"),
+      type:q.question_type||"正誤",
+      statement:q.statement,
+      choices:chs.map(c=>({n:c.number,text:c.text||"",correct:truthy(c.is_correct),expl:c.explanation||""})),
+      explanation:{summary:(e&&e.summary)||"",detail:(e&&e.detail)||"",article:(e&&e.related_articles)||""}
+    });
+  });
+
+  lastJson=JSON.stringify(out,null,2);
+  lastArrayText="const QUESTIONS = "+lastJson+";";
+  showResult(out,warns);
+}
+
+function showResult(out,warns){
+  $("resultCard").classList.remove("hide");
+  const bySub={}; out.forEach(q=>bySub[q.subject]=(bySub[q.subject]||0)+1);
+  let stats='<div class="stat"><div class="n">'+out.length+'</div><div class="l">変換できた問題</div></div>';
+  Object.entries(bySub).forEach(([s,n])=>{ stats+='<div class="stat"><div class="n">'+n+'</div><div class="l">'+s+'</div></div>'; });
+  $("stats").innerHTML=stats;
+
+  if(warns.length){
+    $("warnArea").innerHTML='<div class="warns"><div class="t">確認してほしい点（'+warns.length+'件）</div><ul>'+
+      warns.map(w=>'<li>'+w.replace(/</g,"&lt;")+'</li>').join("")+'</ul></div>';
+  }else{
+    $("warnArea").innerHTML='<div class="ok-msg">問題は見つかりませんでした。そのまま使えます。</div>';
+  }
+  $("preview").textContent = out.length ? JSON.stringify(out[0],null,2) : "（問題が0件です）";
+  $("dlBtn").disabled = $("copyBtn").disabled = (out.length===0);
+}
+
+$("dlBtn").onclick=()=>{
+  if(!lastJson) return;
+  const blob=new Blob([lastJson],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="questions.json"; a.click();
+  URL.revokeObjectURL(a.href);
+};
+$("copyBtn").onclick=async()=>{
+  if(!lastArrayText) return;
+  try{ await navigator.clipboard.writeText(lastArrayText); $("copyBtn").textContent="コピーしました"; setTimeout(()=>$("copyBtn").textContent="QUESTIONS配列をコピー",1500); }
+  catch(e){ alert("コピーに失敗しました。プレビューから手動でコピーしてください。"); }
+};
+</script>
+</body>
+</html>
